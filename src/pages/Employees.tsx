@@ -3,53 +3,62 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { employees as initialEmployees, departments, jobs } from '@/data/mockData';
-import { Employee } from '@/types/hrms';
+import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee, useDepartments, useJobs, Employee } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Database } from '@/integrations/supabase/types';
+
+type EmployeeStatus = Database['public']['Enums']['employee_status'];
+type GenderType = Database['public']['Enums']['gender_type'];
 
 export default function Employees() {
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
+  const { data: employees = [], isLoading } = useEmployees();
+  const { data: departments = [] } = useDepartments();
+  const { data: jobs = [] } = useJobs();
+  const createEmployee = useCreateEmployee();
+  const updateEmployee = useUpdateEmployee();
+  const deleteEmployee = useDeleteEmployee();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<Employee>>({
-    firstName: '',
-    lastName: '',
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
     email: '',
     phone: '',
-    departmentId: '',
-    jobId: '',
-    hireDate: '',
-    status: 'Active',
-    gender: 'Male',
-    dateOfBirth: '',
+    department_id: '',
+    job_id: '',
+    hire_date: '',
+    status: 'active' as EmployeeStatus,
+    gender: 'male' as GenderType,
   });
 
   const columns: Column<Employee>[] = [
     {
       key: 'name',
       header: 'Name',
-      render: (emp) => `${emp.firstName} ${emp.lastName}`,
+      render: (emp) => `${emp.first_name} ${emp.last_name}`,
     },
     { key: 'email', header: 'Email' },
     { key: 'phone', header: 'Phone' },
     {
-      key: 'departmentId',
+      key: 'department_id',
       header: 'Department',
-      render: (emp) => departments.find((d) => d.id === emp.departmentId)?.name || '-',
+      render: (emp) => departments.find((d) => d.id === emp.department_id)?.name || '-',
     },
     {
-      key: 'jobId',
+      key: 'job_id',
       header: 'Job',
-      render: (emp) => jobs.find((j) => j.id === emp.jobId)?.title || '-',
+      render: (emp) => jobs.find((j) => j.id === emp.job_id)?.title || '-',
     },
-    { key: 'hireDate', header: 'Hire Date' },
+    { key: 'hire_date', header: 'Hire Date' },
     {
       key: 'status',
       header: 'Status',
@@ -60,46 +69,82 @@ export default function Employees() {
   const handleAdd = () => {
     setEditingEmployee(null);
     setFormData({
-      firstName: '',
-      lastName: '',
+      first_name: '',
+      last_name: '',
       email: '',
       phone: '',
-      departmentId: '',
-      jobId: '',
-      hireDate: '',
-      status: 'Active',
-      gender: 'Male',
-      dateOfBirth: '',
+      department_id: '',
+      job_id: '',
+      hire_date: new Date().toISOString().split('T')[0],
+      status: 'active',
+      gender: 'male',
     });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (employee: Employee) => {
     setEditingEmployee(employee);
-    setFormData(employee);
+    setFormData({
+      first_name: employee.first_name,
+      last_name: employee.last_name,
+      email: employee.email,
+      phone: employee.phone || '',
+      department_id: employee.department_id || '',
+      job_id: employee.job_id || '',
+      hire_date: employee.hire_date,
+      status: employee.status,
+      gender: employee.gender || 'male',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (employee: Employee) => {
-    setEmployees(employees.filter((e) => e.id !== employee.id));
-    toast({ title: 'Employee deleted', description: `${employee.firstName} ${employee.lastName} has been removed.` });
+  const handleDelete = async (employee: Employee) => {
+    try {
+      await deleteEmployee.mutateAsync(employee.id);
+      toast({ title: 'Employee deleted', description: `${employee.first_name} ${employee.last_name} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete employee.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingEmployee) {
-      setEmployees(employees.map((emp) => (emp.id === editingEmployee.id ? { ...emp, ...formData } as Employee : emp)));
-      toast({ title: 'Employee updated', description: 'Employee details have been updated.' });
-    } else {
-      const newEmployee: Employee = {
-        ...formData as Employee,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone || null,
+        department_id: formData.department_id || null,
+        job_id: formData.job_id || null,
+        hire_date: formData.hire_date,
+        status: formData.status,
+        gender: formData.gender,
       };
-      setEmployees([...employees, newEmployee]);
-      toast({ title: 'Employee added', description: 'New employee has been added.' });
+      if (editingEmployee) {
+        await updateEmployee.mutateAsync({ id: editingEmployee.id, ...dataToSave });
+        toast({ title: 'Employee updated', description: 'Employee details have been updated.' });
+      } else {
+        await createEmployee.mutateAsync(dataToSave);
+        toast({ title: 'Employee added', description: 'New employee has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save employee.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Employees" description="Manage employee information" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -113,7 +158,7 @@ export default function Employees() {
       <DataTable
         data={employees}
         columns={columns}
-        searchKey="firstName"
+        searchKey="first_name"
         searchPlaceholder="Search employees..."
         onEdit={handleEdit}
         onDelete={handleDelete}
@@ -127,20 +172,20 @@ export default function Employees() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="firstName">First Name</Label>
+                <Label htmlFor="first_name">First Name</Label>
                 <Input
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  id="first_name"
+                  value={formData.first_name}
+                  onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name</Label>
+                <Label htmlFor="last_name">Last Name</Label>
                 <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  id="last_name"
+                  value={formData.last_name}
+                  onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                   required
                 />
               </div>
@@ -160,12 +205,11 @@ export default function Employees() {
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="department">Department</Label>
-                <Select value={formData.departmentId} onValueChange={(v) => setFormData({ ...formData, departmentId: v })}>
+                <Select value={formData.department_id} onValueChange={(v) => setFormData({ ...formData, department_id: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
@@ -178,7 +222,7 @@ export default function Employees() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="job">Job</Label>
-                <Select value={formData.jobId} onValueChange={(v) => setFormData({ ...formData, jobId: v })}>
+                <Select value={formData.job_id} onValueChange={(v) => setFormData({ ...formData, job_id: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select job" />
                   </SelectTrigger>
@@ -190,51 +234,39 @@ export default function Employees() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hireDate">Hire Date</Label>
+                <Label htmlFor="hire_date">Hire Date</Label>
                 <Input
-                  id="hireDate"
+                  id="hire_date"
                   type="date"
-                  value={formData.hireDate}
-                  onChange={(e) => setFormData({ ...formData, hireDate: e.target.value })}
+                  value={formData.hire_date}
+                  onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as Employee['status'] })}>
+                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as EmployeeStatus })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Probation">Probation</SelectItem>
-                    <SelectItem value="Leave">Leave</SelectItem>
-                    <SelectItem value="Retired">Retired</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="on-leave">On Leave</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="gender">Gender</Label>
-                <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v as Employee['gender'] })}>
+                <Select value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v as GenderType })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                <Input
-                  id="dateOfBirth"
-                  type="date"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                  required
-                />
               </div>
             </div>
             <div className="flex justify-end gap-2">

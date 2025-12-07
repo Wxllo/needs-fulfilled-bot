@@ -3,8 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { trainingPrograms as initialPrograms } from '@/data/mockData';
-import { TrainingProgram } from '@/types/hrms';
+import { useTrainingPrograms, useCreateTrainingProgram, useUpdateTrainingProgram, useDeleteTrainingProgram, TrainingProgram } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,35 +11,43 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Database } from '@/integrations/supabase/types';
+
+type TrainingStatus = Database['public']['Enums']['training_status'];
 
 export default function TrainingPrograms() {
-  const [programs, setPrograms] = useState<TrainingProgram[]>(initialPrograms);
+  const { data: programs = [], isLoading } = useTrainingPrograms();
+  const createProgram = useCreateTrainingProgram();
+  const updateProgram = useUpdateTrainingProgram();
+  const deleteProgram = useDeleteTrainingProgram();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<TrainingProgram | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<TrainingProgram>>({
+  const [formData, setFormData] = useState({
     name: '',
     description: '',
-    startDate: '',
-    endDate: '',
-    status: 'Upcoming',
-    capacity: 0,
-    enrolledCount: 0,
+    start_date: '',
+    end_date: '',
+    status: 'upcoming' as TrainingStatus,
+    capacity: 20,
+    enrolled: 0,
   });
 
   const columns: Column<TrainingProgram>[] = [
     { key: 'name', header: 'Program Name' },
-    { key: 'startDate', header: 'Start Date' },
-    { key: 'endDate', header: 'End Date' },
+    { key: 'start_date', header: 'Start Date' },
+    { key: 'end_date', header: 'End Date' },
     {
       key: 'enrollment',
       header: 'Enrollment',
       render: (p) => (
         <div className="flex items-center gap-2">
-          <Progress value={(p.enrolledCount / p.capacity) * 100} className="w-20 h-2" />
-          <span className="text-sm text-muted-foreground">{p.enrolledCount}/{p.capacity}</span>
+          <Progress value={(p.enrolled / p.capacity) * 100} className="w-20 h-2" />
+          <span className="text-sm text-muted-foreground">{p.enrolled}/{p.capacity}</span>
         </div>
       ),
     },
@@ -53,36 +60,69 @@ export default function TrainingPrograms() {
 
   const handleAdd = () => {
     setEditingProgram(null);
-    setFormData({ name: '', description: '', startDate: '', endDate: '', status: 'Upcoming', capacity: 0, enrolledCount: 0 });
+    setFormData({ name: '', description: '', start_date: '', end_date: '', status: 'upcoming', capacity: 20, enrolled: 0 });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (program: TrainingProgram) => {
     setEditingProgram(program);
-    setFormData(program);
+    setFormData({
+      name: program.name,
+      description: program.description || '',
+      start_date: program.start_date,
+      end_date: program.end_date,
+      status: program.status,
+      capacity: program.capacity,
+      enrolled: program.enrolled,
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (program: TrainingProgram) => {
-    setPrograms(programs.filter((p) => p.id !== program.id));
-    toast({ title: 'Program deleted', description: `${program.name} has been removed.` });
+  const handleDelete = async (program: TrainingProgram) => {
+    try {
+      await deleteProgram.mutateAsync(program.id);
+      toast({ title: 'Program deleted', description: `${program.name} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete program.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProgram) {
-      setPrograms(programs.map((p) => (p.id === editingProgram.id ? { ...p, ...formData } as TrainingProgram : p)));
-      toast({ title: 'Program updated', description: 'Training program has been updated.' });
-    } else {
-      const newProgram: TrainingProgram = {
-        ...formData as TrainingProgram,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        name: formData.name,
+        description: formData.description || null,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        status: formData.status,
+        capacity: formData.capacity,
+        enrolled: formData.enrolled,
       };
-      setPrograms([...programs, newProgram]);
-      toast({ title: 'Program added', description: 'New training program has been added.' });
+      if (editingProgram) {
+        await updateProgram.mutateAsync({ id: editingProgram.id, ...dataToSave });
+        toast({ title: 'Program updated', description: 'Training program has been updated.' });
+      } else {
+        await createProgram.mutateAsync(dataToSave);
+        toast({ title: 'Program added', description: 'New training program has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save program.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Training Programs" description="Manage training and development programs" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -123,27 +163,26 @@ export default function TrainingPrograms() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                required
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
+                <Label htmlFor="start_date">Start Date</Label>
                 <Input
-                  id="startDate"
+                  id="start_date"
                   type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endDate">End Date</Label>
+                <Label htmlFor="end_date">End Date</Label>
                 <Input
-                  id="endDate"
+                  id="end_date"
                   type="date"
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                   required
                 />
               </div>
@@ -160,26 +199,26 @@ export default function TrainingPrograms() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="enrolledCount">Enrolled Count</Label>
+                <Label htmlFor="enrolled">Enrolled Count</Label>
                 <Input
-                  id="enrolledCount"
+                  id="enrolled"
                   type="number"
-                  value={formData.enrolledCount}
-                  onChange={(e) => setFormData({ ...formData, enrolledCount: Number(e.target.value) })}
+                  value={formData.enrolled}
+                  onChange={(e) => setFormData({ ...formData, enrolled: Number(e.target.value) })}
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as TrainingProgram['status'] })}>
+              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as TrainingStatus })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Upcoming">Upcoming</SelectItem>
-                  <SelectItem value="Ongoing">Ongoing</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="ongoing">Ongoing</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>

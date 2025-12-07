@@ -3,60 +3,51 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { employees } from '@/data/mockData';
+import { useContracts, useCreateContract, useUpdateContract, useDeleteContract, useEmployees, Contract } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Database } from '@/integrations/supabase/types';
 
-interface Contract {
-  id: string;
-  employeeId: string;
-  type: 'Full-Time' | 'Part-Time' | 'Contract' | 'Internship';
-  startDate: string;
-  endDate?: string;
-  salary: number;
-  status: 'Active' | 'Expired' | 'Terminated';
-}
-
-const initialContracts: Contract[] = [
-  { id: '1', employeeId: '1', type: 'Full-Time', startDate: '2020-03-15', salary: 18000, status: 'Active' },
-  { id: '2', employeeId: '2', type: 'Full-Time', startDate: '2019-06-01', salary: 16000, status: 'Active' },
-  { id: '3', employeeId: '3', type: 'Contract', startDate: '2021-01-10', endDate: '2024-01-10', salary: 7500, status: 'Active' },
-  { id: '4', employeeId: '4', type: 'Full-Time', startDate: '2018-09-20', salary: 19000, status: 'Active' },
-  { id: '5', employeeId: '5', type: 'Full-Time', startDate: '2022-04-05', salary: 12000, status: 'Active' },
-  { id: '6', employeeId: '6', type: 'Internship', startDate: '2023-02-14', endDate: '2023-08-14', salary: 3000, status: 'Active' },
-];
+type ContractType = Database['public']['Enums']['contract_type'];
+type ContractStatus = Database['public']['Enums']['contract_status'];
 
 export default function Contracts() {
-  const [contracts, setContracts] = useState<Contract[]>(initialContracts);
+  const { data: contracts = [], isLoading } = useContracts();
+  const { data: employees = [] } = useEmployees();
+  const createContract = useCreateContract();
+  const updateContract = useUpdateContract();
+  const deleteContract = useDeleteContract();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<Contract>>({
-    employeeId: '',
-    type: 'Full-Time',
-    startDate: '',
-    endDate: '',
+  const [formData, setFormData] = useState({
+    employee_id: '',
+    type: 'permanent' as ContractType,
+    start_date: '',
+    end_date: '',
     salary: 0,
-    status: 'Active',
+    status: 'active' as ContractStatus,
   });
 
   const columns: Column<Contract>[] = [
     {
-      key: 'employeeId',
+      key: 'employee_id',
       header: 'Employee',
       render: (c) => {
-        const emp = employees.find((e) => e.id === c.employeeId);
-        return emp ? `${emp.firstName} ${emp.lastName}` : '-';
+        const emp = employees.find((e) => e.id === c.employee_id);
+        return emp ? `${emp.first_name} ${emp.last_name}` : '-';
       },
     },
     { key: 'type', header: 'Contract Type' },
-    { key: 'startDate', header: 'Start Date' },
-    { key: 'endDate', header: 'End Date', render: (c) => c.endDate || 'Indefinite' },
+    { key: 'start_date', header: 'Start Date' },
+    { key: 'end_date', header: 'End Date', render: (c) => c.end_date || 'Indefinite' },
     {
       key: 'salary',
       header: 'Salary',
@@ -71,36 +62,67 @@ export default function Contracts() {
 
   const handleAdd = () => {
     setEditingContract(null);
-    setFormData({ employeeId: '', type: 'Full-Time', startDate: '', endDate: '', salary: 0, status: 'Active' });
+    setFormData({ employee_id: '', type: 'permanent', start_date: '', end_date: '', salary: 0, status: 'active' });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (contract: Contract) => {
     setEditingContract(contract);
-    setFormData(contract);
+    setFormData({
+      employee_id: contract.employee_id,
+      type: contract.type,
+      start_date: contract.start_date,
+      end_date: contract.end_date || '',
+      salary: contract.salary,
+      status: contract.status,
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (contract: Contract) => {
-    setContracts(contracts.filter((c) => c.id !== contract.id));
-    toast({ title: 'Contract deleted', description: 'Contract has been removed.' });
+  const handleDelete = async (contract: Contract) => {
+    try {
+      await deleteContract.mutateAsync(contract.id);
+      toast({ title: 'Contract deleted', description: 'Contract has been removed.' });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete contract.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingContract) {
-      setContracts(contracts.map((c) => (c.id === editingContract.id ? { ...c, ...formData } as Contract : c)));
-      toast({ title: 'Contract updated', description: 'Contract has been updated.' });
-    } else {
-      const newContract: Contract = {
-        ...formData as Contract,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        employee_id: formData.employee_id,
+        type: formData.type,
+        start_date: formData.start_date,
+        end_date: formData.end_date || null,
+        salary: formData.salary,
+        status: formData.status,
       };
-      setContracts([...contracts, newContract]);
-      toast({ title: 'Contract added', description: 'New contract has been added.' });
+      if (editingContract) {
+        await updateContract.mutateAsync({ id: editingContract.id, ...dataToSave });
+        toast({ title: 'Contract updated', description: 'Contract has been updated.' });
+      } else {
+        await createContract.mutateAsync(dataToSave);
+        toast({ title: 'Contract added', description: 'New contract has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save contract.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Contracts" description="Manage employee contracts" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -126,49 +148,49 @@ export default function Contracts() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="employee">Employee</Label>
-              <Select value={formData.employeeId} onValueChange={(v) => setFormData({ ...formData, employeeId: v })}>
+              <Select value={formData.employee_id} onValueChange={(v) => setFormData({ ...formData, employee_id: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select employee" />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</SelectItem>
+                    <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="type">Contract Type</Label>
-              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as Contract['type'] })}>
+              <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as ContractType })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Full-Time">Full-Time</SelectItem>
-                  <SelectItem value="Part-Time">Part-Time</SelectItem>
-                  <SelectItem value="Contract">Contract</SelectItem>
-                  <SelectItem value="Internship">Internship</SelectItem>
+                  <SelectItem value="permanent">Permanent</SelectItem>
+                  <SelectItem value="temporary">Temporary</SelectItem>
+                  <SelectItem value="contract">Contract</SelectItem>
+                  <SelectItem value="internship">Internship</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
+                <Label htmlFor="start_date">Start Date</Label>
                 <Input
-                  id="startDate"
+                  id="start_date"
                   type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endDate">End Date (Optional)</Label>
+                <Label htmlFor="end_date">End Date (Optional)</Label>
                 <Input
-                  id="endDate"
+                  id="end_date"
                   type="date"
-                  value={formData.endDate || ''}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                 />
               </div>
             </div>
@@ -185,14 +207,14 @@ export default function Contracts() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
-                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as Contract['status'] })}>
+                <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as ContractStatus })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Expired">Expired</SelectItem>
-                    <SelectItem value="Terminated">Terminated</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="terminated">Terminated</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

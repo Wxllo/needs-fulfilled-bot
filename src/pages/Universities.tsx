@@ -2,64 +2,88 @@ import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
-import { universities as initialUniversities } from '@/data/mockData';
-import { University } from '@/types/hrms';
+import { useUniversities, useCreateUniversity, useUpdateUniversity, useDeleteUniversity, University } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Universities() {
-  const [universities, setUniversities] = useState<University[]>(initialUniversities);
+  const { data: universities = [], isLoading } = useUniversities();
+  const createUniversity = useCreateUniversity();
+  const updateUniversity = useUpdateUniversity();
+  const deleteUniversity = useDeleteUniversity();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUniversity, setEditingUniversity] = useState<University | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<University>>({
+  const [formData, setFormData] = useState({
     name: '',
     location: '',
-    contactEmail: '',
+    contact_email: '',
   });
 
   const columns: Column<University>[] = [
     { key: 'name', header: 'University Name' },
     { key: 'location', header: 'Location' },
-    { key: 'contactEmail', header: 'Contact Email' },
+    { key: 'contact_email', header: 'Contact Email' },
   ];
 
   const handleAdd = () => {
     setEditingUniversity(null);
-    setFormData({ name: '', location: '', contactEmail: '' });
+    setFormData({ name: '', location: '', contact_email: '' });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (university: University) => {
     setEditingUniversity(university);
-    setFormData(university);
+    setFormData({
+      name: university.name,
+      location: university.location || '',
+      contact_email: university.contact_email || '',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (university: University) => {
-    setUniversities(universities.filter((u) => u.id !== university.id));
-    toast({ title: 'University deleted', description: `${university.name} has been removed.` });
+  const handleDelete = async (university: University) => {
+    try {
+      await deleteUniversity.mutateAsync(university.id);
+      toast({ title: 'University deleted', description: `${university.name} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete university.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUniversity) {
-      setUniversities(universities.map((u) => (u.id === editingUniversity.id ? { ...u, ...formData } as University : u)));
-      toast({ title: 'University updated', description: 'University details have been updated.' });
-    } else {
-      const newUniversity: University = {
-        ...formData as University,
-        id: String(Date.now()),
-      };
-      setUniversities([...universities, newUniversity]);
-      toast({ title: 'University added', description: 'New university has been added.' });
+    try {
+      if (editingUniversity) {
+        await updateUniversity.mutateAsync({ id: editingUniversity.id, ...formData });
+        toast({ title: 'University updated', description: 'University details have been updated.' });
+      } else {
+        await createUniversity.mutateAsync(formData);
+        toast({ title: 'University added', description: 'New university has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save university.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Universities" description="Manage university information" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -100,17 +124,15 @@ export default function Universities() {
                 id="location"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contactEmail">Contact Email</Label>
+              <Label htmlFor="contact_email">Contact Email</Label>
               <Input
-                id="contactEmail"
+                id="contact_email"
                 type="email"
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                required
+                value={formData.contact_email}
+                onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2">

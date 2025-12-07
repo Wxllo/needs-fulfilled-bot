@@ -2,71 +2,103 @@ import { useState } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
-import { faculties as initialFaculties, universities } from '@/data/mockData';
-import { Faculty } from '@/types/hrms';
+import { useFaculties, useCreateFaculty, useUpdateFaculty, useDeleteFaculty, useUniversities, Faculty } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Faculties() {
-  const [faculties, setFaculties] = useState<Faculty[]>(initialFaculties);
+  const { data: faculties = [], isLoading } = useFaculties();
+  const { data: universities = [] } = useUniversities();
+  const createFaculty = useCreateFaculty();
+  const updateFaculty = useUpdateFaculty();
+  const deleteFaculty = useDeleteFaculty();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<Faculty>>({
+  const [formData, setFormData] = useState({
     name: '',
-    universityId: '',
+    university_id: '',
     location: '',
-    contactEmail: '',
+    contact_email: '',
   });
 
   const columns: Column<Faculty>[] = [
     { key: 'name', header: 'Faculty Name' },
     {
-      key: 'universityId',
+      key: 'university_id',
       header: 'University',
-      render: (f) => universities.find((u) => u.id === f.universityId)?.name || '-',
+      render: (f) => universities.find((u) => u.id === f.university_id)?.name || '-',
     },
     { key: 'location', header: 'Location' },
-    { key: 'contactEmail', header: 'Contact Email' },
+    { key: 'contact_email', header: 'Contact Email' },
   ];
 
   const handleAdd = () => {
     setEditingFaculty(null);
-    setFormData({ name: '', universityId: '', location: '', contactEmail: '' });
+    setFormData({ name: '', university_id: '', location: '', contact_email: '' });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (faculty: Faculty) => {
     setEditingFaculty(faculty);
-    setFormData(faculty);
+    setFormData({
+      name: faculty.name,
+      university_id: faculty.university_id || '',
+      location: faculty.location || '',
+      contact_email: faculty.contact_email || '',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (faculty: Faculty) => {
-    setFaculties(faculties.filter((f) => f.id !== faculty.id));
-    toast({ title: 'Faculty deleted', description: `${faculty.name} has been removed.` });
+  const handleDelete = async (faculty: Faculty) => {
+    try {
+      await deleteFaculty.mutateAsync(faculty.id);
+      toast({ title: 'Faculty deleted', description: `${faculty.name} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete faculty.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingFaculty) {
-      setFaculties(faculties.map((f) => (f.id === editingFaculty.id ? { ...f, ...formData } as Faculty : f)));
-      toast({ title: 'Faculty updated', description: 'Faculty details have been updated.' });
-    } else {
-      const newFaculty: Faculty = {
-        ...formData as Faculty,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        name: formData.name,
+        university_id: formData.university_id || null,
+        location: formData.location || null,
+        contact_email: formData.contact_email || null,
       };
-      setFaculties([...faculties, newFaculty]);
-      toast({ title: 'Faculty added', description: 'New faculty has been added.' });
+      if (editingFaculty) {
+        await updateFaculty.mutateAsync({ id: editingFaculty.id, ...dataToSave });
+        toast({ title: 'Faculty updated', description: 'Faculty details have been updated.' });
+      } else {
+        await createFaculty.mutateAsync(dataToSave);
+        toast({ title: 'Faculty added', description: 'New faculty has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save faculty.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Faculties" description="Manage faculty information" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -103,7 +135,7 @@ export default function Faculties() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="university">University</Label>
-              <Select value={formData.universityId} onValueChange={(v) => setFormData({ ...formData, universityId: v })}>
+              <Select value={formData.university_id} onValueChange={(v) => setFormData({ ...formData, university_id: v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select university" />
                 </SelectTrigger>
@@ -120,17 +152,15 @@ export default function Faculties() {
                 id="location"
                 value={formData.location}
                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="contactEmail">Contact Email</Label>
+              <Label htmlFor="contact_email">Contact Email</Label>
               <Input
-                id="contactEmail"
+                id="contact_email"
                 type="email"
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                required
+                value={formData.contact_email}
+                onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
               />
             </div>
             <div className="flex justify-end gap-2">

@@ -3,8 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { performanceCycles as initialCycles } from '@/data/mockData';
-import { PerformanceCycle } from '@/types/hrms';
+import { usePerformanceCycles, useCreatePerformanceCycle, useUpdatePerformanceCycle, useDeletePerformanceCycle, PerformanceCycle } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,25 +11,33 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Database } from '@/integrations/supabase/types';
+
+type CycleStatus = Database['public']['Enums']['cycle_status'];
 
 export default function PerformanceCycles() {
-  const [cycles, setCycles] = useState<PerformanceCycle[]>(initialCycles);
+  const { data: cycles = [], isLoading } = usePerformanceCycles();
+  const createCycle = useCreatePerformanceCycle();
+  const updateCycle = useUpdatePerformanceCycle();
+  const deleteCycle = useDeletePerformanceCycle();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<PerformanceCycle | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<PerformanceCycle>>({
+  const [formData, setFormData] = useState({
     name: '',
-    startDate: '',
-    endDate: '',
-    status: 'Planning',
+    start_date: '',
+    end_date: '',
+    status: 'draft' as CycleStatus,
     description: '',
   });
 
   const columns: Column<PerformanceCycle>[] = [
     { key: 'name', header: 'Cycle Name' },
-    { key: 'startDate', header: 'Start Date' },
-    { key: 'endDate', header: 'End Date' },
+    { key: 'start_date', header: 'Start Date' },
+    { key: 'end_date', header: 'End Date' },
     { key: 'description', header: 'Description' },
     {
       key: 'status',
@@ -41,36 +48,65 @@ export default function PerformanceCycles() {
 
   const handleAdd = () => {
     setEditingCycle(null);
-    setFormData({ name: '', startDate: '', endDate: '', status: 'Planning', description: '' });
+    setFormData({ name: '', start_date: '', end_date: '', status: 'draft', description: '' });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (cycle: PerformanceCycle) => {
     setEditingCycle(cycle);
-    setFormData(cycle);
+    setFormData({
+      name: cycle.name,
+      start_date: cycle.start_date,
+      end_date: cycle.end_date,
+      status: cycle.status,
+      description: cycle.description || '',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (cycle: PerformanceCycle) => {
-    setCycles(cycles.filter((c) => c.id !== cycle.id));
-    toast({ title: 'Cycle deleted', description: `${cycle.name} has been removed.` });
+  const handleDelete = async (cycle: PerformanceCycle) => {
+    try {
+      await deleteCycle.mutateAsync(cycle.id);
+      toast({ title: 'Cycle deleted', description: `${cycle.name} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete cycle.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingCycle) {
-      setCycles(cycles.map((c) => (c.id === editingCycle.id ? { ...c, ...formData } as PerformanceCycle : c)));
-      toast({ title: 'Cycle updated', description: 'Performance cycle has been updated.' });
-    } else {
-      const newCycle: PerformanceCycle = {
-        ...formData as PerformanceCycle,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        name: formData.name,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        status: formData.status,
+        description: formData.description || null,
       };
-      setCycles([...cycles, newCycle]);
-      toast({ title: 'Cycle added', description: 'New performance cycle has been added.' });
+      if (editingCycle) {
+        await updateCycle.mutateAsync({ id: editingCycle.id, ...dataToSave });
+        toast({ title: 'Cycle updated', description: 'Performance cycle has been updated.' });
+      } else {
+        await createCycle.mutateAsync(dataToSave);
+        toast({ title: 'Cycle added', description: 'New performance cycle has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save cycle.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Performance Cycles" description="Manage performance review cycles" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -115,37 +151,36 @@ export default function PerformanceCycles() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
+                <Label htmlFor="start_date">Start Date</Label>
                 <Input
-                  id="startDate"
+                  id="start_date"
                   type="date"
-                  value={formData.startDate}
-                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endDate">End Date</Label>
+                <Label htmlFor="end_date">End Date</Label>
                 <Input
-                  id="endDate"
+                  id="end_date"
                   type="date"
-                  value={formData.endDate}
-                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  value={formData.end_date}
+                  onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                   required
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as PerformanceCycle['status'] })}>
+              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as CycleStatus })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Planning">Planning</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Review">Review</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
