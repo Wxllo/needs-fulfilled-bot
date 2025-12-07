@@ -3,8 +3,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable, Column } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { jobs as initialJobs } from '@/data/mockData';
-import { Job } from '@/types/hrms';
+import { useJobs, useCreateJob, useUpdateJob, useDeleteJob, Job } from '@/hooks/useSupabaseData';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,20 +11,29 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Database } from '@/integrations/supabase/types';
+
+type JobLevel = Database['public']['Enums']['job_level'];
+type JobStatus = Database['public']['Enums']['job_status'];
 
 export default function Jobs() {
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const { data: jobs = [], isLoading } = useJobs();
+  const createJob = useCreateJob();
+  const updateJob = useUpdateJob();
+  const deleteJob = useDeleteJob();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const { toast } = useToast();
 
-  const [formData, setFormData] = useState<Partial<Job>>({
+  const [formData, setFormData] = useState({
     title: '',
     description: '',
-    level: 'Entry',
-    minSalary: 0,
-    maxSalary: 0,
-    status: 'Active',
+    level: 'entry' as JobLevel,
+    min_salary: 0,
+    max_salary: 0,
+    status: 'open' as JobStatus,
     category: '',
   });
 
@@ -36,7 +44,7 @@ export default function Jobs() {
     {
       key: 'salary',
       header: 'Salary Range',
-      render: (job) => `$${job.minSalary.toLocaleString()} - $${job.maxSalary.toLocaleString()}`,
+      render: (job) => `$${(job.min_salary || 0).toLocaleString()} - $${(job.max_salary || 0).toLocaleString()}`,
     },
     {
       key: 'status',
@@ -47,36 +55,69 @@ export default function Jobs() {
 
   const handleAdd = () => {
     setEditingJob(null);
-    setFormData({ title: '', description: '', level: 'Entry', minSalary: 0, maxSalary: 0, status: 'Active', category: '' });
+    setFormData({ title: '', description: '', level: 'entry', min_salary: 0, max_salary: 0, status: 'open', category: '' });
     setIsDialogOpen(true);
   };
 
   const handleEdit = (job: Job) => {
     setEditingJob(job);
-    setFormData(job);
+    setFormData({
+      title: job.title,
+      description: job.description || '',
+      level: job.level,
+      min_salary: job.min_salary || 0,
+      max_salary: job.max_salary || 0,
+      status: job.status,
+      category: job.category || '',
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (job: Job) => {
-    setJobs(jobs.filter((j) => j.id !== job.id));
-    toast({ title: 'Job deleted', description: `${job.title} has been removed.` });
+  const handleDelete = async (job: Job) => {
+    try {
+      await deleteJob.mutateAsync(job.id);
+      toast({ title: 'Job deleted', description: `${job.title} has been removed.` });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete job.', variant: 'destructive' });
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingJob) {
-      setJobs(jobs.map((j) => (j.id === editingJob.id ? { ...j, ...formData } as Job : j)));
-      toast({ title: 'Job updated', description: 'Job details have been updated.' });
-    } else {
-      const newJob: Job = {
-        ...formData as Job,
-        id: String(Date.now()),
+    try {
+      const dataToSave = {
+        title: formData.title,
+        description: formData.description || null,
+        level: formData.level,
+        min_salary: formData.min_salary || null,
+        max_salary: formData.max_salary || null,
+        status: formData.status,
+        category: formData.category || null,
       };
-      setJobs([...jobs, newJob]);
-      toast({ title: 'Job added', description: 'New job has been added.' });
+      if (editingJob) {
+        await updateJob.mutateAsync({ id: editingJob.id, ...dataToSave });
+        toast({ title: 'Job updated', description: 'Job details have been updated.' });
+      } else {
+        await createJob.mutateAsync(dataToSave);
+        toast({ title: 'Job added', description: 'New job has been added.' });
+      }
+      setIsDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to save job.', variant: 'destructive' });
     }
-    setIsDialogOpen(false);
   };
+
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <PageHeader title="Jobs" description="Manage job positions" />
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -117,7 +158,6 @@ export default function Jobs() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                required
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -127,56 +167,53 @@ export default function Jobs() {
                   id="category"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  required
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="level">Level</Label>
-                <Select value={formData.level} onValueChange={(v) => setFormData({ ...formData, level: v as Job['level'] })}>
+                <Select value={formData.level} onValueChange={(v) => setFormData({ ...formData, level: v as JobLevel })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Entry">Entry</SelectItem>
-                    <SelectItem value="Junior">Junior</SelectItem>
-                    <SelectItem value="Mid">Mid</SelectItem>
-                    <SelectItem value="Senior">Senior</SelectItem>
-                    <SelectItem value="Lead">Lead</SelectItem>
-                    <SelectItem value="Manager">Manager</SelectItem>
-                    <SelectItem value="Director">Director</SelectItem>
+                    <SelectItem value="entry">Entry</SelectItem>
+                    <SelectItem value="mid">Mid</SelectItem>
+                    <SelectItem value="senior">Senior</SelectItem>
+                    <SelectItem value="lead">Lead</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="director">Director</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="minSalary">Min Salary</Label>
+                <Label htmlFor="min_salary">Min Salary</Label>
                 <Input
-                  id="minSalary"
+                  id="min_salary"
                   type="number"
-                  value={formData.minSalary}
-                  onChange={(e) => setFormData({ ...formData, minSalary: Number(e.target.value) })}
-                  required
+                  value={formData.min_salary}
+                  onChange={(e) => setFormData({ ...formData, min_salary: Number(e.target.value) })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="maxSalary">Max Salary</Label>
+                <Label htmlFor="max_salary">Max Salary</Label>
                 <Input
-                  id="maxSalary"
+                  id="max_salary"
                   type="number"
-                  value={formData.maxSalary}
-                  onChange={(e) => setFormData({ ...formData, maxSalary: Number(e.target.value) })}
-                  required
+                  value={formData.max_salary}
+                  onChange={(e) => setFormData({ ...formData, max_salary: Number(e.target.value) })}
                 />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as Job['status'] })}>
+              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as JobStatus })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="on-hold">On Hold</SelectItem>
                 </SelectContent>
               </Select>
             </div>
