@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Building2, Loader2, Users, Shield, BarChart3, GraduationCap } from 'lucide-react';
+import { Loader2, Users, Shield, BarChart3, GraduationCap } from 'lucide-react';
 import { z } from 'zod';
+import giuLogo from '@/assets/giu-logo.jpg';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -144,19 +145,13 @@ export default function Auth() {
       <div className="hidden lg:flex flex-col justify-between p-12 bg-sidebar text-sidebar-foreground relative overflow-hidden">
         {/* Background decorations */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-sidebar-primary/10 blur-3xl animate-float" />
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-primary/10 blur-3xl animate-float" style={{ animationDelay: '3s' }} />
+          <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-kpi-gold/10 blur-3xl animate-float" />
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-kpi-maroon/10 blur-3xl animate-float" style={{ animationDelay: '3s' }} />
         </div>
         
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar-primary shadow-lg">
-              <Building2 className="h-6 w-6 text-sidebar-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">GIU HRMS</h1>
-              <p className="text-sidebar-muted text-sm">German International University</p>
-            </div>
+          <div className="bg-white rounded-xl p-4 inline-block shadow-lg">
+            <img src={giuLogo} alt="German International University" className="h-16 w-auto" />
           </div>
         </div>
 
@@ -187,7 +182,7 @@ export default function Auth() {
         </div>
 
         <div className="relative z-10 text-sidebar-muted text-sm">
-          © 2024 German International University. All rights reserved.
+          © 2025 German International University. All rights reserved.
         </div>
       </div>
 
@@ -196,15 +191,10 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           {/* Mobile header */}
           <div className="lg:hidden text-center">
-            <div className="inline-flex items-center gap-3 mb-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-primary shadow-lg">
-                <Building2 className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div className="text-left">
-                <h1 className="text-xl font-bold">GIU HRMS</h1>
-                <p className="text-muted-foreground text-xs">Human Resource Management</p>
-              </div>
+            <div className="inline-block mb-4 bg-white p-3 rounded-xl shadow-lg">
+              <img src={giuLogo} alt="GIU" className="h-12 w-auto" />
             </div>
+            <p className="text-muted-foreground text-sm">Human Resource Management System</p>
           </div>
 
           <Card className="border-0 shadow-medium">

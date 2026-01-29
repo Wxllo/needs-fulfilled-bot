@@ -59,6 +59,8 @@ export default {
           muted: "hsl(var(--sidebar-muted))",
         },
         kpi: {
+          gold: "hsl(var(--kpi-gold))",
+          maroon: "hsl(var(--kpi-maroon))",
           blue: "hsl(var(--kpi-blue))",
           green: "hsl(var(--kpi-green))",
           orange: "hsl(var(--kpi-orange))",

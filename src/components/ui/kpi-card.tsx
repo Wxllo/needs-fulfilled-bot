@@ -8,7 +8,7 @@ interface KPICardProps {
   change?: string;
   changeType?: 'positive' | 'negative' | 'neutral';
   icon?: LucideIcon;
-  variant?: 'default' | 'blue' | 'green' | 'orange' | 'purple' | 'teal';
+  variant?: 'default' | 'blue' | 'green' | 'orange' | 'purple' | 'teal' | 'gold' | 'maroon';
 }
 
 const variantStyles = {
@@ -18,6 +18,8 @@ const variantStyles = {
   orange: 'bg-card border-kpi-orange/20',
   purple: 'bg-card border-kpi-purple/20',
   teal: 'bg-card border-kpi-teal/20',
+  gold: 'bg-card border-kpi-gold/20',
+  maroon: 'bg-card border-kpi-maroon/20',
 };
 
 const iconStyles = {
@@ -27,6 +29,8 @@ const iconStyles = {
   orange: 'text-kpi-orange',
   purple: 'text-kpi-purple',
   teal: 'text-kpi-teal',
+  gold: 'text-kpi-gold',
+  maroon: 'text-kpi-maroon',
 };
 
 const valueStyles = {
@@ -36,6 +40,8 @@ const valueStyles = {
   orange: 'text-kpi-orange',
   purple: 'text-kpi-purple',
   teal: 'text-kpi-teal',
+  gold: 'text-kpi-gold',
+  maroon: 'text-kpi-maroon',
 };
 
 export function KPICard({
