@@ -1,4 +1,4 @@
-import { Building2, LogOut, User } from 'lucide-react';
+import { LogOut, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import giuLogo from '@/assets/giu-logo.jpg';
 
 interface HeaderProps {
   title?: string;
@@ -33,22 +34,27 @@ export function Header({ title = 'Human Resources Management System' }: HeaderPr
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6">
-      <div className="flex items-center gap-2">
-        <Building2 className="h-5 w-5 text-primary" />
-        <span className="text-lg font-medium text-foreground">{title}</span>
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6 shadow-sm">
+      <div className="flex items-center gap-3">
+        <img 
+          src={giuLogo} 
+          alt="GIU" 
+          className="h-10 w-auto object-contain"
+        />
+        <div className="h-6 w-px bg-border" />
+        <span className="text-lg font-semibold text-foreground">{title}</span>
       </div>
 
       {user && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
+            <Button variant="ghost" className="flex items-center gap-2 hover:bg-secondary">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-accent text-accent-foreground">
+                <AvatarFallback className="bg-kpi-gold text-primary-foreground font-semibold">
                   {getInitials()}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden md:inline-block text-sm">{user.email}</span>
+              <span className="hidden md:inline-block text-sm font-medium">{user.email}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">

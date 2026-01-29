@@ -14,6 +14,7 @@ import {
   Award,
   BookOpen,
 } from 'lucide-react';
+import giuLogo from '@/assets/giu-logo.jpg';
 
 interface NavItem {
   title: string;
@@ -70,12 +71,13 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar">
       <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sidebar-primary">
-            <Building2 className="h-5 w-5 text-sidebar-primary-foreground" />
-          </div>
-          <span className="text-lg font-semibold text-sidebar-foreground">HR Portal</span>
+        {/* GIU Logo */}
+        <div className="flex h-20 items-center justify-center border-b border-sidebar-border px-4 bg-white">
+          <img 
+            src={giuLogo} 
+            alt="German International University" 
+            className="h-14 w-auto object-contain"
+          />
         </div>
 
         {/* Navigation */}
@@ -96,8 +98,8 @@ export function Sidebar() {
                         cn(
                           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium sidebar-transition',
                           isActive
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                            : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
+                            ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                         )
                       }
                     >
@@ -110,6 +112,13 @@ export function Sidebar() {
             </div>
           ))}
         </nav>
+
+        {/* Footer */}
+        <div className="border-t border-sidebar-border p-4">
+          <p className="text-center text-xs text-sidebar-muted">
+            © 2025 GIU HRMS
+          </p>
+        </div>
       </div>
     </aside>
   );
